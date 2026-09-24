@@ -5,7 +5,9 @@ import fs from 'node:fs';
 const KEY = process.env.METALPRICEAPI_KEY;
 const API = process.env.API_BASE || 'https://api.metalpriceapi.com/v1';
 const FILE = 'public/aluminium.json';
-const OZ_PER_TONNE = 32150.7466;          // troy ounces per metrische ton
+// ALU wordt geleverd per ounce (avoirdupois, 1/16 lb); gevalideerd tegen LME-referenties sep 2026.
+const OZ_PER_TONNE = 35273.962;           // avoirdupois ounces per metrische ton
+const DATA_VERSION = 2;
 const TZ = 'Europe/Amsterdam';
 const KEEP_DAYS = 1100;
 
@@ -36,7 +38,9 @@ function point(rates) {
 
 let data = { updated: null, ts: null, latest: null, history: [], intraday: [], meta: {} };
 try { data = { ...data, ...JSON.parse(fs.readFileSync(FILE, 'utf8')) }; } catch { /* eerste run */ }
-const hist = new Map(data.history.map((p) => [p.d, p]));
+if (data.meta.v !== DATA_VERSION) { data.history = []; data.intraday = []; data.meta = { v: DATA_VERSION }; }
+const isWeekend = (d) => { const w = new Date(d + 'T12:00:00Z').getUTCDay(); return w === 0 || w === 6; };
+const hist = new Map(data.history.filter((p) => !isWeekend(p.d)).map((p) => [p.d, p]));
 
 // Eenmalige backfill: twee jaar dagkoersen (2 requests)
 if (!data.meta.backfilled) {
@@ -48,7 +52,7 @@ if (!data.meta.backfilled) {
       const rows = Array.isArray(j.rates)
         ? j.rates.map((x) => [dayOf(x.timestamp), x.rates])
         : Object.entries(j.rates || {});
-      for (const [d, rates] of rows) { const p = point(rates); if (p) hist.set(d, { d, ...p }); }
+      for (const [d, rates] of rows) { if (isWeekend(d)) continue; const p = point(rates); if (p) hist.set(d, { d, ...p }); }
     }
     data.meta.backfilled = true;
   } catch (e) { console.warn('Backfill mislukt, volgende run opnieuw:', e.message); }
@@ -60,8 +64,7 @@ const p = point(j.rates);
 if (!p) throw new Error('Onbruikbare waarde ontvangen: ' + JSON.stringify(j.rates));
 const ts = j.timestamp || Math.floor(Date.now() / 1000);
 const d = dayOf(ts);
-const wd = new Date(d + 'T12:00:00Z').getUTCDay();
-if (wd !== 0 && wd !== 6) hist.set(d, { d, ...p });   // weekend niet als handelsdag opslaan
+if (!isWeekend(d)) hist.set(d, { d, ...p });   // weekend niet als handelsdag opslaan
 
 const intra = (data.intraday || []).filter((x) => dayOf(x.t) === d && x.t !== ts);
 intra.push({ t: ts, usd: p.usd, eur: p.eur });
