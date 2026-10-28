@@ -2,7 +2,10 @@ name: Aluminiumkoers bijwerken
 
 on:
   schedule:
-    - cron: '7 5-19 * * 1-5'   # elk uur, ma-vr, 07:07-21:07 NL-zomertijd
+    # Twee regels, want GitHub rekent in UTC. De controlestap hieronder laat per run
+    # alleen de regel door die bij de huidige NL-tijd hoort (zomer of winter).
+    - cron: '5 6-19 * * 1-5'   # zomertijd (UTC+2): elk uur 08:05-21:05 NL
+    - cron: '5 7-20 * * 1-5'   # wintertijd (UTC+1): elk uur 08:05-21:05 NL
   workflow_dispatch:
 
 permissions:
@@ -15,7 +18,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.tijd.outputs.run }}
+    steps:
+      - name: Hoort deze run bij de huidige NL-tijd?
+        id: tijd
+        env:
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          OFFSET=$(TZ=Europe/Amsterdam date +%z)
+          RUN=false
+          if [ "$EVENT" != "schedule" ]; then RUN=true; fi
+          if [ "$SCHEDULE" = "5 6-19 * * 1-5" ] && [ "$OFFSET" = "+0200" ]; then RUN=true; fi
+          if [ "$SCHEDULE" = "5 7-20 * * 1-5" ] && [ "$OFFSET" = "+0100" ]; then RUN=true; fi
+          echo "event=$EVENT schedule=$SCHEDULE offset=$OFFSET run=$RUN"
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+
   update:
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
