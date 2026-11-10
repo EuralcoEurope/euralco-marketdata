@@ -2,10 +2,11 @@ name: Aluminiumkoers bijwerken
 
 on:
   schedule:
+    # Minuut :17 en niet :00-:05, want GitHub vertraagt of schrapt geplande runs rond het hele uur.
     # Twee regels, want GitHub rekent in UTC. De controlestap hieronder laat per run
     # alleen de regel door die bij de huidige NL-tijd hoort (zomer of winter).
-    - cron: '5 6-19 * * 1-5'   # zomertijd (UTC+2): elk uur 08:05-21:05 NL
-    - cron: '5 7-20 * * 1-5'   # wintertijd (UTC+1): elk uur 08:05-21:05 NL
+    - cron: '17 6-19 * * 1-5'  # zomertijd (UTC+2): elk uur 08:17-21:17 NL
+    - cron: '17 7-20 * * 1-5'  # wintertijd (UTC+1): elk uur 08:17-21:17 NL
   workflow_dispatch:
 
 permissions:
@@ -32,8 +33,8 @@ jobs:
           OFFSET=$(TZ=Europe/Amsterdam date +%z)
           RUN=false
           if [ "$EVENT" != "schedule" ]; then RUN=true; fi
-          if [ "$SCHEDULE" = "5 6-19 * * 1-5" ] && [ "$OFFSET" = "+0200" ]; then RUN=true; fi
-          if [ "$SCHEDULE" = "5 7-20 * * 1-5" ] && [ "$OFFSET" = "+0100" ]; then RUN=true; fi
+          if [ "$SCHEDULE" = "17 6-19 * * 1-5" ] && [ "$OFFSET" = "+0200" ]; then RUN=true; fi
+          if [ "$SCHEDULE" = "17 7-20 * * 1-5" ] && [ "$OFFSET" = "+0100" ]; then RUN=true; fi
           echo "event=$EVENT schedule=$SCHEDULE offset=$OFFSET run=$RUN"
           echo "run=$RUN" >> "$GITHUB_OUTPUT"
 
